@@ -1,0 +1,4 @@
+# PROPOSAL 
+For my Final project I want to make a multiplayer party game pack consisting of 2 different games. These being Chameleon and Wavelength both multiplayer games that you can host and join a room made possible through socket.io. I want to show and play with the AI using external libraries and working with parts that it cant access directly but still being able to build something functional attached to external sources. 
+
+I am going to make a SPEC.md that is a full spec sheet doc describing the project as a whole that I will tell the agent to reference whenever it has a questions and as it goes through the steps. Else I will give it parts of the spec sheet to start and run through and give specific tasks to break up the much larger project. I will modify the sheet with any issues and the AGENTS.md to give specific dos or donts. 
