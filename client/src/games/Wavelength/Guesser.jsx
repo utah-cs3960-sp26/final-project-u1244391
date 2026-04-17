@@ -1,0 +1,45 @@
+import { useState } from 'react'
+import { useGame } from '../../context/GameContext.jsx'
+import Dial from './Dial.jsx'
+import Button from '../../components/Button.jsx'
+
+export default function Guesser() {
+  const { gameState, sendAction } = useGame()
+  const [position, setPosition] = useState(90)
+  const [submitted, setSubmitted] = useState(false)
+
+  function handleSubmit() {
+    sendAction('submitGuess', { guess: position })
+    setSubmitted(true)
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto">
+      <h2 className="text-2xl font-bold text-indigo-400 mb-2">📡 Wavelength</h2>
+      {gameState.question && (
+        <p className="text-lg text-slate-300 mb-2 text-center">{gameState.question}</p>
+      )}
+
+      {gameState.clueGiverAnswer && (
+        <div className="bg-indigo-900/50 rounded-xl px-6 py-4 mb-4 text-center">
+          <p className="text-sm text-indigo-300">Answer</p>
+          <p className="text-2xl font-bold text-white">{gameState.clueGiverAnswer}</p>
+        </div>
+      )}
+
+      <div className="mb-4 w-full">
+        <Dial value={position} onChange={submitted ? undefined : setPosition} />
+      </div>
+
+      {!submitted ? (
+        <Button variant="primary" fullWidth onClick={handleSubmit}>
+          Submit Guess
+        </Button>
+      ) : (
+        <p className="text-slate-400 text-lg animate-pulse">
+          Waiting for others... ({gameState.guessCount ?? 0}/{gameState.totalGuessers ?? '?'})
+        </p>
+      )}
+    </div>
+  )
+}
