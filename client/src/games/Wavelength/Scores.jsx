@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useGame } from '../../context/GameContext.jsx'
 import Button from '../../components/Button.jsx'
+import ChatPanel from '../../components/ChatPanel.jsx'
 
 export default function Scores() {
   const navigate = useNavigate()
@@ -8,6 +9,7 @@ export default function Scores() {
   const { scores = [] } = gameState
   const sorted = [...scores].sort((a, b) => b.total - a.total)
   const winner = sorted[0]
+  const isDraw = sorted.length >= 2 && sorted[0].total === sorted[1].total
   const isHost = player.id === room.hostId
 
   function handleBackToLobby() {
@@ -18,7 +20,10 @@ export default function Scores() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto">
       <h2 className="text-3xl font-bold text-indigo-400 mb-2">🏆 Final Scores</h2>
-      {winner && <p className="text-xl text-yellow-400 mb-6">{winner.name} wins!</p>}
+      {isDraw
+        ? <p className="text-xl text-yellow-400 mb-6">🤝 It&apos;s a draw!</p>
+        : winner && <p className="text-xl text-yellow-400 mb-6">{winner.name} wins!</p>
+      }
 
       <div className="w-full space-y-2 mb-8">
         {sorted.map((s, i) => (
@@ -44,6 +49,8 @@ export default function Scores() {
       ) : (
         <p className="text-slate-400 text-center animate-pulse">Waiting for host to return to lobby...</p>
       )}
+
+      <ChatPanel />
     </div>
   )
 }

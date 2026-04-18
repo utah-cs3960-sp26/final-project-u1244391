@@ -21,6 +21,9 @@ class Chameleon extends BaseGame {
     this.votes = {};
     this.redemptionGuess = null;
     this.outcome = null;
+    this.betweenRounds = false;
+    this.betweenRoundsTimer = null;
+    this.completedRound = null;
 
     this.phases = new PhaseManager(['clues', 'voting', 'redemption', 'reveal']);
   }
@@ -49,6 +52,7 @@ class Chameleon extends BaseGame {
 
   _handleSubmitHint(playerId, payload) {
     if (!this.phases.is('clues')) return { error: 'Not in clues phase' };
+    if (this.betweenRounds) return { error: 'Waiting for next round' };
 
     const activePlayerId = this.turnOrder[this.currentTurnIndex];
     if (playerId !== activePlayerId) return { error: 'Not your turn' };
@@ -62,15 +66,26 @@ class Chameleon extends BaseGame {
     this.currentTurnIndex++;
 
     if (this.currentTurnIndex >= this.turnOrder.length) {
-      this.currentTurnIndex = 0;
-      this.currentRound++;
-
-      if (this.currentRound > this.totalRounds) {
+      if (this.currentRound >= this.totalRounds) {
+        // Final round done — go straight to voting
         this.phases.next();
+      } else {
+        // Pause between rounds for 5 seconds
+        this.betweenRounds = true;
+        this.completedRound = this.currentRound;
+        return { success: true, delayAdvance: 5 };
       }
     }
 
     return { success: true };
+  }
+
+  advanceFromBetweenRounds() {
+    if (!this.betweenRounds) return;
+    this.betweenRounds = false;
+    this.completedRound = null;
+    this.currentTurnIndex = 0;
+    this.currentRound++;
   }
 
   _handleSubmitVote(playerId, payload) {
@@ -136,10 +151,14 @@ class Chameleon extends BaseGame {
       hints: this.hints,
       players: playerList,
       isChameleon,
+      betweenRounds: this.betweenRounds,
+      completedRound: this.completedRound,
     };
 
-    if (phase === 'clues') {
+    if (phase === 'clues' && !this.betweenRounds) {
       state.activePlayerId = this.turnOrder[this.currentTurnIndex];
+    } else if (phase === 'clues' && this.betweenRounds) {
+      state.activePlayerId = null;
     }
 
     if (phase === 'clues' || phase === 'voting' || phase === 'redemption') {

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useGame } from '../../context/GameContext.jsx'
 import ClueInput from './ClueInput.jsx'
 
@@ -11,13 +12,36 @@ export default function Grid() {
     activePlayerId,
     currentRound,
     totalRounds,
+    betweenRounds,
+    completedRound,
   } = gameState
 
-  const isMyTurn = activePlayerId === player.id
+  const isMyTurn = !betweenRounds && activePlayerId === player.id
   const activePlayer = players.find((p) => p.id === activePlayerId)
 
-  // Only show the current round's hint per player
-  const currentRoundHints = hints.filter((h) => h.round === currentRound)
+  // During betweenRounds, show the completed round's hints; otherwise show current round
+  const displayRound = betweenRounds ? completedRound : currentRound
+  const currentRoundHints = hints.filter((h) => h.round === displayRound)
+
+  // Countdown timer for between-rounds pause
+  const [countdown, setCountdown] = useState(5)
+  useEffect(() => {
+    if (!betweenRounds) {
+      setCountdown(5)
+      return
+    }
+    setCountdown(5)
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [betweenRounds, completedRound])
 
   function handleSubmitHint(hint) {
     sendAction('submitHint', { hint })
@@ -28,7 +52,12 @@ export default function Grid() {
       {/* Header */}
       <div className="text-center mb-6">
         <h2 className="text-2xl font-bold text-emerald-400 mb-1">🦎 Chameleon</h2>
-        <p className="text-sm text-slate-400">Round {currentRound ?? 1} of {totalRounds ?? 3}</p>
+        <p className="text-sm text-slate-400">
+          {betweenRounds
+            ? `Round ${completedRound} of ${totalRounds ?? 3} — Complete!`
+            : `Round ${currentRound ?? 1} of ${totalRounds ?? 3}`
+          }
+        </p>
       </div>
 
       {/* Keyword / Chameleon banner */}
@@ -47,7 +76,7 @@ export default function Grid() {
       <div className="grid grid-cols-2 gap-3 mb-6">
         {players.map((p) => {
           const hint = currentRoundHints.find((h) => h.playerId === p.id)
-          const isActive = p.id === activePlayerId
+          const isActive = !betweenRounds && p.id === activePlayerId
           return (
             <div
               key={p.id}
@@ -66,13 +95,26 @@ export default function Grid() {
         })}
       </div>
 
+      {/* Between rounds countdown */}
+      {betweenRounds && (
+        <div className="text-center">
+          <p className="text-lg text-emerald-400 font-semibold mb-2">Round {completedRound} complete!</p>
+          <p className="text-4xl font-mono font-bold text-white mb-2">{countdown}</p>
+          <p className="text-sm text-slate-400">Next round starting soon...</p>
+        </div>
+      )}
+
       {/* Input or waiting */}
-      {isMyTurn ? (
-        <ClueInput onSubmit={handleSubmitHint} />
-      ) : (
-        <p className="text-center text-slate-400">
-          Waiting for {activePlayer?.name ?? 'player'}...
-        </p>
+      {!betweenRounds && (
+        <>
+          {isMyTurn ? (
+            <ClueInput onSubmit={handleSubmitHint} />
+          ) : (
+            <p className="text-center text-slate-400">
+              Waiting for {activePlayer?.name ?? 'player'}...
+            </p>
+          )}
+        </>
       )}
     </div>
   )

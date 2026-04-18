@@ -31,7 +31,7 @@ export default function Home() {
     const handler = (data) => {
       off('room:created', handler)
       off('error', errHandler)
-      setPlayer({ id: data.playerId, name: name.trim() })
+      setPlayer({ id: data.playerId, name: name.trim(), color: data.playerColor })
       setRoom({ code: data.code, players: data.players, hostId: data.hostId, gameType: selectedGame, theme: '' })
       navigate(`/lobby/${data.code}`)
     }
@@ -47,7 +47,7 @@ export default function Home() {
     const handler = (data) => {
       off('room:joined', handler)
       off('error', errHandler)
-      setPlayer({ id: data.playerId, name: name.trim() })
+      setPlayer({ id: data.playerId, name: name.trim(), color: data.playerColor })
       setRoom({ code: data.code, players: data.players, hostId: data.hostId, gameType: data.gameType, theme: '' })
       navigate(`/lobby/${data.code}`)
     }

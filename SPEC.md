@@ -57,7 +57,7 @@ When a player selects **Host**:
 
 When a player selects **Join**:
 1. They are presented with a field for the **room code** and their **player name**.
-2. After entering both, they enter the lobby and wait for the host to start.
+2. After entering both, they are assigned a random available color and enter the lobby to wait for the host to start.
 
 ### 2.3 Game Start
 
@@ -116,10 +116,11 @@ Room data structure stored on server:
 ```js
 {
   code: 'WXQZ',
-  players: [{ id, name, socketId, score }],
+  players: [{ id, name, socketId, score, color }],  // color is one of 20 fixed hex values
   host: playerId,
   currentGame: 'wavelength' | 'chameleon',
-  game: <BaseGame instance>
+  game: <BaseGame instance>,
+  chat: []   // array of { playerId, name, color, message, timestamp } — resets each match
 }
 ```
 
@@ -147,8 +148,12 @@ All games communicate through a single generic event pair. This keeps the client
 |---|---|
 | `game:action` | Client → Server: player submits an action (clue, guess, vote, etc.) |
 | `game:state` | Server → Client: personalized state broadcast after every action |
-| `room:update` | Server → All: player joined/left, game started |
+| `room:update` | Server → All: player joined/left, game started, player profile updated |
 | `game:error` | Server → Client: validation error (wrong phase, not your turn) |
+| `player:update` | Client → Server: player changes their name or color |
+| `player:updated` | Server → All: broadcast updated player profile to all room members |
+| `chat:send` | Client → Server: player sends a chat message |
+| `chat:message` | Server → All: broadcast new message to all room members |
 
 The server loops through all players and emits `game:state` individually using `getStateFor()` — never broadcasting the same object to all players at once.
 
@@ -190,94 +195,169 @@ _processNext() {
 
 ## 5. Game 1 — Wavelength
 
-One randomly selected player is the **Clue Giver** for the entire game. The backend generates a random target value from **0–180**, represented on a half-circle dial. Only the Clue Giver can see where the target sits on the dial. A question prompt is shown to all players (e.g. *"Give me a candy bar"* or *"Give me a sport"*) — the Clue Giver answers with their response, which is then revealed to everyone. All other players drag their own dial to where they think that answer falls on the 0–180 scale. The closer their guess, the more points they earn. This repeats for **4 rounds total** with a new random target and new question each round. The same Clue Giver is used for all 4 rounds. Points accumulate across rounds and a winner is crowned on the final leaderboard. Players are then returned to the host room.
+One randomly selected player is the **Clue Giver** for the entire game. Each round a random **scale** is shown to all players — a spectrum with a label on each end (e.g. *Boring ⟷ Exciting*). The backend secretly places a target value on the 0–180 internal dial, visible only to the Clue Giver. The Clue Giver thinks of something that belongs somewhere on that scale and types their answer. Once submitted, all other players drag their own dial to where they believe that answer falls. After everyone locks in their guess, the round results screen shows the target, all player guesses as lines on the dial, and a per-round score breakdown from highest to lowest. The host advances to the next round. After 4 rounds a final leaderboard crowns the winner and players return to the host room.
 
-### 5.1 Question Prompts
+### 5.1 Scale Prompts
 
-Questions are open-ended and opinionated, prompting the Clue Giver to place something on an implied spectrum. The backend stores a pool of prompts and picks one randomly each round. Example prompts include:
+Each round uses a **scale** — two opposing labels that define the ends of the spectrum. The Clue Giver reads the scale and thinks of something that falls at the exact position the target marks. All players see the scale during both the clue-giving and guessing phases. The backend stores the full prompt list and picks one randomly per round without repeating within the same game session.
 
-- "Give me a **movie**"
-- "Give me a **video game**"
-- "Give me a **candy bar**"
-- "Give me a **home cooked meal**"
-- "Give me a **soda**"
-- "Give me a **sport**"
-- "Give me a **TV show**"
-- "Give me a **fast food order**"
-- "Give me a **vacation destination**"
+**Display format:** `[Left Label] ⟷ [Right Label]`
 
-The prompt pool should contain at least 30 entries so repeats within a single game session are unlikely.
+The full prompt list (stored in `/server/data/wavelengthScales.json`):
+
+```json
+[
+  { "left": "Would NOT introduce my grandma to", "right": "Would introduce my grandma to" },
+  { "left": "Completely useless", "right": "Extremely useful" },
+  { "left": "Cheap", "right": "Expensive" },
+  { "left": "Boring", "right": "Exciting" },
+  { "left": "Risky", "right": "Safe" },
+  { "left": "Ugly", "right": "Beautiful" },
+  { "left": "Dumb idea", "right": "Genius idea" },
+  { "left": "Casual", "right": "Formal" },
+  { "left": "Low effort", "right": "High effort" },
+  { "left": "Forgettable", "right": "Unforgettable" },
+  { "left": "Bad habit", "right": "Good habit" },
+  { "left": "Lazy", "right": "Productive" },
+  { "left": "Unhealthy", "right": "Healthy" },
+  { "left": "Weird", "right": "Normal" },
+  { "left": "Illegal", "right": "Totally legal" },
+  { "left": "Soft", "right": "Hard" },
+  { "left": "Cold", "right": "Hot" },
+  { "left": "Would survive a zombie apocalypse", "right": "Dies immediately" },
+  { "left": "Smells terrible", "right": "Smells amazing" },
+  { "left": "Looks edible", "right": "Definitely looks not edible" },
+  { "left": "Gives good advice", "right": "Gives terrible advice" },
+  { "left": "Peak confidence", "right": "Zero confidence" },
+  { "left": "Totally trustworthy", "right": "Absolutely suspicious" },
+  { "left": "Would win reality TV", "right": "First one out" },
+  { "left": "Would clap when the plane lands", "right": "Judges people who clap" },
+  { "left": "Could fix it", "right": "Makes it worse" },
+  { "left": "Looks like it would taste good", "right": "Looks like it would taste awful" },
+  { "left": "Should exist", "right": "Should NOT exist" },
+  { "left": "Better in theory", "right": "Better in practice" },
+  { "left": "Makes life easier", "right": "Makes life harder" },
+  { "left": "High IQ", "right": "Street smart" },
+  { "left": "Sounds fake", "right": "Sounds real" },
+  { "left": "Makes sense", "right": "Makes zero sense" },
+  { "left": "Would ruin a party", "right": "Makes the party" },
+  { "left": "Would get you in trouble", "right": "Completely acceptable" },
+  { "left": "Mild inconvenience", "right": "Absolute disaster" },
+  { "left": "Feels wrong", "right": "Feels right" },
+  { "left": "Would do again", "right": "Never again" },
+  { "left": "Easy to hide", "right": "Impossible to hide" },
+  { "left": "Harmless prank", "right": "Ends a friendship" },
+  { "left": "Revolutionary", "right": "A fad" },
+  { "left": "Should be a sport", "right": "Should be illegal" },
+  { "left": "Tastes like 'Yellow'", "right": "Tastes like 'Blue'" },
+  { "left": "Overrated", "right": "Underrated" },
+  { "left": "Worth the hype", "right": "Total scam" },
+  { "left": "Comforting", "right": "Unsettling" }
+]
+```
 
 ### 5.2 Game Phases
 
 | Phase | What Happens |
 |---|---|
-| `setup` | Clue Giver randomly assigned, round 1 target (0–180) and question generated |
-| `giving-clue` | Clue Giver sees the dial with the hidden target marked; they read the question and type their answer |
-| `guessing` | Clue Giver's answer is revealed to all; all other players drag their dial to guess the target position (0–180) and submit |
-| `reveal` | Target position revealed on the dial; each player's guess shown; round scores calculated and added to totals |
-| `scores` | Final leaderboard shown after round 4; winner crowned; host returns everyone to the host room |
+| `setup` | Clue Giver randomly assigned; round 1 target (0–180 internal) and scale randomly selected |
+| `giving-clue` | All players see the scale labels on either end of the dial; only the Clue Giver sees the target marker; Clue Giver types their answer and submits |
+| `guessing` | Clue Giver's answer is revealed to all players; all other players drag their dial handle to their best guess and press Confirm |
+| `round-reveal` | Target marker shown on the dial; each player's guess rendered as a labeled line on the arc; per-round scores listed below the dial from highest to lowest; host presses Continue |
+| `scores` | Final leaderboard shown after round 4; winner announced; host returns everyone to the host room |
 
-Rounds 1–3 cycle back from `reveal` → `giving-clue` with a new target and question. After round 4 the game advances to `scores`.
+Rounds 1–3 cycle: `round-reveal` → `giving-clue` with a new target and new scale. After round 4, the game advances to `scores`.
 
 ### 5.3 Game State
 
 ```js
 {
-  phase: 'giving-clue' | 'guessing' | 'reveal' | 'scores',
+  phase: 'giving-clue' | 'guessing' | 'round-reveal' | 'scores',
   clueGiverId: 'abc123',
-  currentRound: 1,           // 1–4
+  currentRound: 1,              // 1–4
   totalRounds: 4,
-  question: 'Give me a candy bar',
-  targetPosition: 134,       // 0–180, hidden from guessers until reveal
-  clueGiverAnswer: 'Snickers', // null until submitted
-  guesses: {
-    playerId1: 128,
-    playerId2: 145
+  scale: {
+    left: 'Boring',
+    right: 'Exciting'
   },
-  roundScores: {
-    playerId1: 4,
-    playerId2: 2
+  targetPosition: 134,          // 0–180 internally, NEVER sent to guessers before round-reveal
+  clueGiverAnswer: 'Skydiving', // null until Clue Giver submits
+  guesses: {
+    playerId1: 120,
+    playerId2: 148,
+    playerId3: 101
+  },
+  roundScores: {                // populated after all guesses in; sorted desc for display
+    playerId1: 5,
+    playerId2: 3,
+    playerId3: 1
   },
   totalScores: {
-    playerId1: 7,
-    playerId2: 5
-  }
+    playerId1: 12,
+    playerId2: 8,
+    playerId3: 5
+  },
+  usedScaleIndices: [3, 11, 27] // tracks which scales have been used this game to prevent repeats
 }
 ```
 
-### 5.4 Personalized State (getStateFor)
+### 5.4 Displayed Score vs. Internal Position
 
-`targetPosition` is sent **only to the Clue Giver** during the `giving-clue` and `guessing` phases. It is sent to all players during `reveal`. The Clue Giver's answer is hidden from all players until the `guessing` phase begins.
+The internal dial range is **0–180** and all server-side calculations (target, guesses, distance) use this range. However, the **score displayed to players is mapped to 0–100** for simplicity. The conversion is purely cosmetic — applied only at the display layer:
 
-### 5.5 Socket Actions
+```js
+// Display conversion (frontend only)
+const displayScore = Math.round((internalPosition / 180) * 100);
+```
+
+Scale labels remain anchored to the 0 and 180 endpoints of the arc visually. Players interact with and see a 0–100 scale on screen while all game logic runs on 0–180 internally.
+
+### 5.5 Round Reveal Screen
+
+After all guesses are submitted, the `round-reveal` phase shows:
+
+1. **The dial** — target marker revealed, plus a labeled line for each player's guess rendered on the arc at their submitted position. Each line is colored with that player's assigned room color and shows their name.
+2. **Score breakdown** — listed below the dial, sorted from highest score to lowest for the round. Each row shows: player avatar (color + initials), name, round points earned, and cumulative total.
+3. **Continue button** — visible only to the host. Pressing it advances to the next round or to the final leaderboard if round 4 is complete.
+
+Non-host players see a "Waiting for host..." indicator instead of the Continue button.
+
+### 5.6 Personalized State (getStateFor)
+
+`targetPosition` is sent **only to the Clue Giver** during `giving-clue` and `guessing`. It is sent to **all players** once the phase is `round-reveal`. The Clue Giver's answer is withheld from all players (including the Clue Giver in their broadcast) until the `guessing` phase begins.
+
+### 5.7 Socket Actions
 
 | Action | Payload + Who Sends It |
 |---|---|
 | `submitAnswer` | `{ answer: string }` — Clue Giver only, during `giving-clue` |
-| `submitGuess` | `{ position: 0–180 }` — all guessers, during `guessing` |
-| `nextRound` | `{}` — host only, advances from `reveal` to next round or `scores` |
+| `submitGuess` | `{ position: 0–180 }` — all guessers, during `guessing`; Clue Giver does not submit |
+| `nextRound` | `{}` — host only, advances from `round-reveal` to next round or `scores` |
 
-### 5.6 Dial Component
+### 5.8 Dial Component
 
-The dial is rendered as a **half-circle (180°)** using SVG or CSS. It functions like a range input mapped to 0–180. The Clue Giver's view shows a marker at the target position. Guessers see a draggable handle they can position anywhere along the arc before submitting.
+The dial is rendered as a **half-circle (180°)** using SVG. The left and right scale labels are anchored to each end of the arc. Key behaviors:
 
-> Build and test the dial with a hardcoded target value before wiring up socket logic. Confirm it looks correct on mobile screens (375px wide minimum).
+- **Clue Giver view (`giving-clue`):** Target marker shown at its true position; Clue Giver sees exactly where on the scale they need to aim their answer.
+- **Guesser view (`guessing`):** No target marker visible; player drags a handle freely around the arc and presses **Confirm** to lock in. The handle position is displayed as a 0–100 value for player-facing feedback.
+- **Reveal view (`round-reveal`):** Target marker shown; each player's guess rendered as a thin colored line extending from the center of the arc outward at their submitted angle, labeled with their name in their color.
 
-### 5.7 Scoring
+> Build and test the dial with a hardcoded target and hardcoded guesses before wiring socket logic. Confirm needle/line rendering works on mobile (375px minimum width).
 
-Points are awarded per round based on how close each guesser's dial position is to the target:
+### 5.9 Scoring
 
-| Distance from Target | Points |
+Distance is calculated on the **internal 0–180 scale**. Points per round:
+
+| Distance from Target (internal 0–180) | Points |
 |---|---|
-| Within 5 (perfect) | 5 points |
-| Within 12 | 4 points |
-| Within 20 | 3 points |
-| Within 35 | 2 points |
-| Within 50 | 1 point |
-| More than 50 away | 0 points |
+| Within 9 — perfect | 5 points |
+| Within 18 | 4 points |
+| Within 36 | 3 points |
+| Within 54 | 2 points |
+| Within 72 | 1 point |
+| More than 72 away | 0 points |
 
-Scores from all 4 rounds are summed. The player with the highest total at the end wins.
+These thresholds correspond roughly to within 5, 10, 20, 30, and 40 on the displayed 0–100 scale, keeping the feel consistent with what players see. Scores from all 4 rounds are summed. The player with the highest total at the end of round 4 wins.
 
 ---
 
@@ -394,9 +474,172 @@ If caught, the Chameleon is shown a text input and has **one attempt** to guess 
 
 ---
 
-## 7. Frontend Design
+---
 
-### 7.1 Routing
+## 7. Lobby — Player Customization
+
+### 7.1 Player Color Assignment
+
+When a player joins a room they are automatically assigned a random color from a fixed palette of **20 options**. No two players in the same room can share a color at the same time.
+
+The palette is stored as a constant on the server:
+
+```js
+const PLAYER_COLORS = [
+  '#EF4444', // Red
+  '#F97316', // Orange
+  '#EAB308', // Yellow
+  '#22C55E', // Green
+  '#14B8A6', // Teal
+  '#3B82F6', // Blue
+  '#6366F1', // Indigo
+  '#A855F7', // Purple
+  '#EC4899', // Pink
+  '#F43F5E', // Rose
+  '#84CC16', // Lime
+  '#06B6D4', // Cyan
+  '#8B5CF6', // Violet
+  '#D946EF', // Fuchsia
+  '#FB923C', // Amber-Orange
+  '#34D399', // Emerald
+  '#60A5FA', // Light Blue
+  '#F472B6', // Light Pink
+  '#A3E635', // Yellow-Green
+  '#FBBF24', // Amber
+];
+```
+
+On join, the server picks a random color from the list of colors **not currently in use** by any other player in that room and assigns it. If all 20 colors are somehow taken (20+ players), assignment falls back to the first available slot — this edge case should be handled gracefully without crashing.
+
+### 7.2 Edit Player Profile (Name & Color)
+
+Each player in the lobby sees their own card with an **Edit** button. Clicking Edit opens an inline edit mode on their card with:
+
+- A **name text input** pre-filled with their current name
+- A **color picker grid** showing all 20 palette swatches, with taken colors visually grayed out/disabled and the player's current color highlighted
+
+**Name update rules:**
+- The name updates and broadcasts to all players when the user presses **Enter** or **clicks/taps outside** the input field (on blur).
+- Empty names are rejected — the field reverts to the previous name.
+- Name changes are reflected immediately on all other players' lobby screens.
+
+**Color update rules:**
+- Only available (unselected) colors can be clicked.
+- When a player selects a new color, the server immediately frees their old color and marks the new color as taken.
+- The full updated player list (with new color assignments) is broadcast to all players in the room via `room:update`.
+- The color picker reflects the live availability state — if another player grabs a color while someone has the picker open, that swatch becomes disabled in real time.
+
+### 7.3 Game-Start Race Condition
+
+If the host starts the game while a player is actively editing their profile (name input focused or color picker open), the client handles this gracefully:
+
+- The edit UI is immediately dismissed/closed on the client side when a `room:update` event with `status: 'game_started'` is received.
+- Any unsaved name change in progress is **discarded** — the player keeps their last confirmed name.
+- The player is transitioned into the game with whatever name and color were last confirmed on the server.
+- No error is shown; the transition is seamless.
+
+### 7.4 Server-Side Player Update Handling
+
+When the server receives a `player:update` event:
+
+1. Validate the payload — reject empty names, reject colors already taken by another player.
+2. If a color change is requested, free the old color in the room's taken-color set and claim the new one.
+3. Update the player object in the room's `players` array.
+4. Emit `player:updated` to all sockets in the room with the full updated `players` array.
+
+```js
+// player:update payload
+{ name: string, color: string }  // either or both fields may be present
+
+// player:updated broadcast
+{ players: [{ id, name, color, socketId, score }] }
+```
+
+### 7.5 Lobby UI Layout
+
+The lobby screen shows:
+
+- Room code displayed prominently (so late joiners can share it)
+- A scrollable list of **player cards**, each showing the player's colored avatar circle (initials), their name, and an Edit button (only visible on the player's own card)
+- Host-only controls at the bottom: **Start Game** button, and (for Chameleon) **Choose Theme** dropdown
+- The **live chat panel** (see Section 8) rendered alongside or below the player list
+
+---
+
+## 8. Live Chat
+
+### 8.1 Overview
+
+A live chat panel is available in the following screens across both games:
+
+| Screen | Both Games |
+|---|---|
+| Lobby (waiting for host to start) | ✅ |
+| End-game results / leaderboard | ✅ |
+| Wavelength round result (between rounds) | ✅ (Wavelength only) |
+
+Chat is **room-scoped** — only players in the same room see the same chat. Chat history is **match-scoped** — it is cleared every time the host starts a new game (i.e. when the game transitions from `lobby` back into `setup`). Players cannot see messages from a previous match once a new one begins.
+
+### 8.2 Message Format
+
+Each message is stored and rendered with the sender's name in their assigned color so players are visually identifiable at a glance.
+
+```js
+// Chat message object
+{
+  playerId: 'abc123',
+  name: 'Jordan',
+  color: '#3B82F6',
+  message: 'good luck everyone',
+  timestamp: 1713000000000
+}
+```
+
+Rendered display format: **Jordan** (in blue): good luck everyone
+
+The player's name is rendered in their `color` hex value. The message text uses the default text color.
+
+### 8.3 Chat Reset Behavior
+
+The chat array lives on the room object on the server (`room.chat`). It is reset to `[]` at the moment the host presses **Start Game** — before any `game_started` broadcast is sent. This means players arrive at the first game screen with a clean chat and no carryover from the lobby.
+
+When players return to the host room after a game ends, they start again with an empty chat. Each match gets its own clean slate.
+
+### 8.4 Socket Events
+
+| Event | Payload | Direction |
+|---|---|---|
+| `chat:send` | `{ message: string }` | Client → Server |
+| `chat:message` | `{ playerId, name, color, message, timestamp }` | Server → All in room |
+
+The server appends the full player metadata (name, color) when broadcasting — clients never send their own name or color with a message to prevent spoofing.
+
+Message length is capped at **200 characters** on the server. Messages exceeding this are truncated before broadcast.
+
+### 8.5 Chat UI
+
+- The chat panel renders as a scrollable message list with the input field pinned at the bottom.
+- New messages auto-scroll the list to the bottom.
+- The sender's name is displayed in their color, bold, followed by a colon and the message text.
+- The input submits on **Enter** (not Shift+Enter). Shift+Enter is ignored (no multiline).
+- The input field is cleared after a successful send.
+- Messages sent by the local player may be visually distinguished (e.g. slightly different background) but must still show the name+color prefix for consistency.
+- On mobile the chat panel should not obscure game controls — it should be collapsible or scroll independently.
+
+### 8.6 Where Chat Is NOT Available
+
+Chat is intentionally absent during active gameplay phases to keep players focused:
+
+- Chameleon: `clues`, `voting`, `redemption` phases
+- Wavelength: `giving-clue`, `guessing` phases
+
+It reappears on the `reveal` / `scores` / round result screens as defined in Section 8.1.
+
+---
+
+## 9. Frontend Design
+
+### 9.1 Routing
 
 | Route | Purpose |
 |---|---|
@@ -404,21 +647,23 @@ If caught, the Chameleon is shown a text input and has **one attempt** to guess 
 | `/lobby/:code` | Waiting room, game picker, host starts |
 | `/game/:code` | Active game — renders Wavelength or Chameleon |
 
-### 7.2 GameContext
+### 9.2 GameContext
 
 A single React context holds all shared state so no prop drilling is needed across deeply nested game components.
 
 ```js
 const GameContext = {
-  player: { id, name },
-  room: { code, players, host },
+  player: { id, name, color },
+  room: { code, players, host },   // players array includes { id, name, color }
   gameType: 'wavelength' | 'chameleon',
   gameState: { ...personalized state from server },
-  sendAction: (action, payload) => void
+  chat: [{ playerId, name, color, message, timestamp }],
+  sendAction: (action, payload) => void,
+  sendChat: (message) => void
 }
 ```
 
-### 7.3 useSocket Hook
+### 9.3 useSocket Hook
 
 Wraps all Socket.io logic. Every component calls `sendAction()` — nothing touches the socket directly.
 
@@ -429,7 +674,7 @@ const { sendAction } = useSocket(roomCode, playerId, onStateUpdate);
 sendAction('submitClue', { clue: 'misty' });
 ```
 
-### 7.4 UI Philosophy
+### 9.4 UI Philosophy
 
 - Bold typography and color — no sprites, icons, or art assets needed
 - Each game has its own accent color: **Wavelength = Indigo**, **Chameleon = Emerald**
@@ -437,7 +682,7 @@ sendAction('submitClue', { clue: 'misty' });
 - Tailwind CSS for all styling — no custom CSS files
 - Tested on mobile: large tap targets, no cramped grids below 375px wide
 
-### 7.5 Phase-Driven Rendering
+### 9.5 Phase-Driven Rendering
 
 Each game's `index.jsx` reads the phase from `gameState` and renders the correct sub-component:
 
@@ -452,13 +697,13 @@ if (phase === 'scores') return <Scores />;
 
 ---
 
-## 8. Deployment — Render
+## 10. Deployment — Render
 
-### 8.1 Overview
+### 10.1 Overview
 
 The client and server are deployed as two separate Render services. Anyone with the room code can join via a browser on any device — no install required.
 
-### 8.2 Server — Web Service
+### 10.2 Server — Web Service
 
 - Runtime: Node.js
 - Build Command: `npm install`
@@ -466,14 +711,14 @@ The client and server are deployed as two separate Render services. Anyone with 
 - Environment Variable: `PORT` (Render sets this automatically)
 - Free tier: 512MB RAM, sleeps after 15 min inactivity
 
-### 8.3 Client — Static Site
+### 10.3 Client — Static Site
 
 - Build Command: `npm run build`
 - Publish Directory: `client/dist`
 - Environment Variable: `VITE_SERVER_URL = https://your-server.onrender.com`
 - Free tier: unlimited bandwidth for static assets
 
-### 8.4 Keep-Alive (Critical for Demo Day)
+### 10.4 Keep-Alive (Critical for Demo Day)
 
 Render's free tier sleeps after 15 minutes of inactivity. A cold start takes 30–60 seconds which will break a live demo. Fix this with UptimeRobot:
 
@@ -482,7 +727,7 @@ Render's free tier sleeps after 15 minutes of inactivity. A cold start takes 30�
 3. Create a monitor: HTTP, your Render URL + `/health`, every 5 minutes
 4. Server stays awake indefinitely
 
-### 8.5 CORS Configuration
+### 10.5 CORS Configuration
 
 ```js
 const io = new Server(server, {
@@ -495,9 +740,9 @@ const io = new Server(server, {
 
 ---
 
-## 9. All Packages & Libraries
+## 11. All Packages & Libraries
 
-### 9.1 Client (client/package.json)
+### 11.1 Client (client/package.json)
 
 | Package | Version | Purpose |
 |---|---|---|
@@ -511,7 +756,7 @@ const io = new Server(server, {
 | postcss | ^8.x | Required by Tailwind |
 | autoprefixer | ^10.x | Required by Tailwind |
 
-### 9.2 Server (server/package.json)
+### 11.2 Server (server/package.json)
 
 | Package | Version | Purpose |
 |---|---|---|
@@ -521,7 +766,7 @@ const io = new Server(server, {
 | dotenv | ^16.x | Load .env variables |
 | nodemon | ^3.x (dev) | Auto-restart on file changes |
 
-### 9.3 External Services (All Free)
+### 11.3 External Services (All Free)
 
 | Service | Purpose + Free Tier |
 |---|---|
@@ -532,7 +777,7 @@ const io = new Server(server, {
 
 ---
 
-## 10. Recommended Build Order
+## 12. Recommended Build Order
 
 Build in this sequence to avoid getting stuck. Each step proves the next one works.
 
@@ -545,3 +790,5 @@ Build in this sequence to avoid getting stuck. Each step proves the next one wor
 7. **Deploy to Render + UptimeRobot** — at least 3 days before demo
 
 ---
+
+*Party Pack — All libraries and services are free and open source*

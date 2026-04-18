@@ -3,15 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useGame } from '../context/GameContext.jsx'
 import Button from '../components/Button.jsx'
 import PlayerList from '../components/PlayerList.jsx'
+import ChatPanel from '../components/ChatPanel.jsx'
 
 const CHAMELEON_THEMES = ['Movies', 'College Majors', 'Sports', 'Celebrities', 'Video Games']
 
 export default function Lobby() {
   const { code } = useParams()
   const navigate = useNavigate()
-  const { player, room, setRoom, on, off, emit } = useGame()
+  const { player, room, setRoom, setGameState, setChat, on, off, emit } = useGame()
   const [theme, setTheme] = useState(room.theme || CHAMELEON_THEMES[0])
   const [copied, setCopied] = useState(false)
+
+  const [countdown, setCountdown] = useState(null)
 
   const isHost = player.id === room.hostId
   const isChameleon = room.gameType === 'chameleon'
@@ -19,23 +22,38 @@ export default function Lobby() {
   useEffect(() => {
     const handleUpdate = (data) => {
       setRoom((prev) => ({ ...prev, ...data }))
+      if (data.chat) setChat(data.chat)
     }
     const handleStarted = () => {
       navigate(`/game/${code}`)
     }
-    const handleState = () => {
+    const handleState = (state) => {
+      setGameState(state)
       navigate(`/game/${code}`)
     }
     const handleClosed = () => navigate('/')
+    const handleCountdown = ({ seconds }) => {
+      setCountdown(seconds)
+      let remaining = seconds
+      const interval = setInterval(() => {
+        remaining--
+        if (remaining <= 0) {
+          clearInterval(interval)
+        }
+        setCountdown(remaining)
+      }, 1000)
+    }
     on('room:update', handleUpdate)
     on('game:started', handleStarted)
     on('game:state', handleState)
     on('room:closed', handleClosed)
+    on('game:countdown', handleCountdown)
     return () => {
       off('room:update', handleUpdate)
       off('game:started', handleStarted)
       off('game:state', handleState)
       off('room:closed', handleClosed)
+      off('game:countdown', handleCountdown)
     }
   }, [on, off, code, navigate, setRoom])
 
@@ -92,24 +110,41 @@ export default function Lobby() {
         <PlayerList players={room.players} hostId={room.hostId} />
       </div>
 
+      {/* Chat */}
+      <ChatPanel />
+
+      {/* Countdown overlay */}
+      {countdown !== null && countdown > 0 && (
+        <div className="text-center mb-6">
+          <p className="text-lg text-slate-300 mb-2">Game starting in</p>
+          <p className={`text-7xl font-mono font-bold ${isChameleon ? 'text-emerald-400' : 'text-indigo-400'}`}>
+            {countdown}
+          </p>
+        </div>
+      )}
+
       {/* Actions */}
-      {isHost ? (
-        <div className="space-y-3">
-          <Button
-            variant={isChameleon ? 'success' : 'primary'}
-            fullWidth
-            onClick={handleStart}
-            disabled={room.players.length < 2}
-          >
-            Start Game
-          </Button>
-          <Button variant="danger" fullWidth onClick={handleLeave}>Close Room</Button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-center text-slate-400 text-lg">Waiting for host to start...</p>
-          <Button variant="danger" fullWidth onClick={handleLeave}>Leave Room</Button>
-        </div>
+      {countdown === null && (
+        <>
+          {isHost ? (
+            <div className="space-y-3">
+              <Button
+                variant={isChameleon ? 'success' : 'primary'}
+                fullWidth
+                onClick={handleStart}
+                disabled={room.players.length < 2}
+              >
+                Start Game
+              </Button>
+              <Button variant="danger" fullWidth onClick={handleLeave}>Close Room</Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-center text-slate-400 text-lg">Waiting for host to start...</p>
+              <Button variant="danger" fullWidth onClick={handleLeave}>Leave Room</Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

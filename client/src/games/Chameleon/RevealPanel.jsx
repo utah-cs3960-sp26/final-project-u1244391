@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useGame } from '../../context/GameContext.jsx'
 import Button from '../../components/Button.jsx'
+import ChatPanel from '../../components/ChatPanel.jsx'
 
 export default function RevealPanel() {
   const navigate = useNavigate()
@@ -104,6 +105,8 @@ export default function RevealPanel() {
       ) : (
         <p className="text-slate-400 text-center animate-pulse">Waiting for host to return to lobby...</p>
       )}
+
+      <ChatPanel />
     </div>
   )
 }

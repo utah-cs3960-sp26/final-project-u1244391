@@ -1,6 +1,6 @@
 const BaseGame = require('./BaseGame');
 const PhaseManager = require('../PhaseManager');
-const prompts = require('../data/wavelengthPrompts.json');
+const scales = require('../data/wavelengthScales.json');
 
 class Wavelength extends BaseGame {
   constructor(roomCode, players) {
@@ -8,11 +8,11 @@ class Wavelength extends BaseGame {
 
     this.totalRounds = 4;
     this.currentRound = 1;
-    this.usedPrompts = [];
+    this.usedScaleIndices = [];
 
     this.clueGiverId = players[Math.floor(Math.random() * players.length)].id;
     this.targetPosition = this._randomTarget();
-    this.question = this._pickPrompt();
+    this.scale = this._pickScale();
     this.clueGiverAnswer = null;
     this.guesses = {};
     this.roundScores = {};
@@ -22,28 +22,31 @@ class Wavelength extends BaseGame {
       this.totalScores[p.id] = 0;
     }
 
-    this.phases = new PhaseManager(['giving-clue', 'guessing', 'reveal', 'scores']);
+    this.phases = new PhaseManager(['giving-clue', 'guessing', 'round-reveal', 'scores']);
   }
 
   _randomTarget() {
     return Math.floor(Math.random() * 181);
   }
 
-  _pickPrompt() {
-    const available = prompts.filter((p) => !this.usedPrompts.includes(p));
-    const pool = available.length > 0 ? available : prompts;
-    const prompt = pool[Math.floor(Math.random() * pool.length)];
-    this.usedPrompts.push(prompt);
-    return prompt;
+  _pickScale() {
+    const available = scales
+      .map((s, i) => ({ ...s, idx: i }))
+      .filter((s) => !this.usedScaleIndices.includes(s.idx));
+    const pool = available.length > 0 ? available : scales.map((s, i) => ({ ...s, idx: i }));
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    this.usedScaleIndices.push(pick.idx);
+    return { left: pick.left, right: pick.right };
   }
 
   _scoreGuess(guess) {
     const distance = Math.abs(guess - this.targetPosition);
-    if (distance <= 5) return 5;
-    if (distance <= 12) return 4;
-    if (distance <= 20) return 3;
-    if (distance <= 35) return 2;
-    if (distance <= 50) return 1;
+    if (distance === 0) return 7;
+    if (distance <= 9) return 5;
+    if (distance <= 18) return 4;
+    if (distance <= 36) return 3;
+    if (distance <= 54) return 2;
+    if (distance <= 72) return 1;
     return 0;
   }
 
@@ -92,12 +95,12 @@ class Wavelength extends BaseGame {
   }
 
   _handleNextRound(playerId) {
-    if (!this.phases.is('reveal')) return { error: 'Not in reveal phase' };
+    if (!this.phases.is('round-reveal')) return { error: 'Not in round-reveal phase' };
 
     if (this.currentRound < this.totalRounds) {
       this.currentRound++;
       this.targetPosition = this._randomTarget();
-      this.question = this._pickPrompt();
+      this.scale = this._pickScale();
       this.clueGiverAnswer = null;
       this.guesses = {};
       this.roundScores = {};
@@ -114,7 +117,11 @@ class Wavelength extends BaseGame {
     const phase = this.phases.current();
     const isClueGiver = playerId === this.clueGiverId;
 
-    const playerList = this.players.map((p) => ({ id: p.id, name: p.name }));
+    const playerList = this.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      color: p.color || null,
+    }));
 
     const state = {
       phase,
@@ -123,22 +130,25 @@ class Wavelength extends BaseGame {
       clueGiverName: this.players.find((p) => p.id === this.clueGiverId)?.name || 'Unknown',
       currentRound: this.currentRound,
       totalRounds: this.totalRounds,
-      question: this.question,
+      scale: this.scale,
       players: playerList,
     };
 
+    // Target: only clue giver sees it before round-reveal
     if (phase === 'giving-clue' || phase === 'guessing') {
       state.targetPosition = isClueGiver ? this.targetPosition : null;
     } else {
       state.targetPosition = this.targetPosition;
     }
 
-    if (phase === 'guessing' || phase === 'reveal' || phase === 'scores') {
+    // Clue giver answer: hidden until guessing
+    if (phase === 'guessing' || phase === 'round-reveal' || phase === 'scores') {
       state.clueGiverAnswer = this.clueGiverAnswer;
     } else {
       state.clueGiverAnswer = null;
     }
 
+    // Guessing phase: show own guess status
     if (phase === 'guessing' && !isClueGiver) {
       state.myGuess = this.guesses[playerId] !== undefined ? this.guesses[playerId] : null;
       state.hasGuessed = this.guesses[playerId] !== undefined;
@@ -147,23 +157,42 @@ class Wavelength extends BaseGame {
       state.totalGuessers = guessers.length;
     }
 
-    if (phase === 'reveal' || phase === 'scores') {
-      state.guesses = Object.entries(this.guesses).map(([pid, pos]) => ({
-        name: this.players.find((p) => p.id === pid)?.name || pid,
-        position: pos,
-      }));
-      state.roundScores = Object.entries(this.roundScores).map(([pid, pts]) => ({
-        name: this.players.find((p) => p.id === pid)?.name || pid,
-        points: pts,
-      }));
+    // Round-reveal and scores: show all guesses with player info, and scores
+    if (phase === 'round-reveal' || phase === 'scores') {
+      state.guesses = Object.entries(this.guesses).map(([pid, pos]) => {
+        const p = this.players.find((pl) => pl.id === pid);
+        return {
+          playerId: pid,
+          name: p?.name || pid,
+          color: p?.color || null,
+          position: pos,
+        };
+      });
+      state.roundScores = Object.entries(this.roundScores)
+        .map(([pid, pts]) => {
+          const p = this.players.find((pl) => pl.id === pid);
+          return {
+            playerId: pid,
+            name: p?.name || pid,
+            color: p?.color || null,
+            points: pts,
+            total: this.totalScores[pid] || 0,
+          };
+        })
+        .sort((a, b) => b.points - a.points);
     }
 
-    // totalScores always as sorted array
+    // Total scores as sorted array — exclude clue giver (they don't guess)
     state.scores = Object.entries(this.totalScores)
-      .map(([pid, total]) => ({
-        name: this.players.find((p) => p.id === pid)?.name || pid,
-        total,
-      }))
+      .filter(([pid]) => pid !== this.clueGiverId)
+      .map(([pid, total]) => {
+        const p = this.players.find((pl) => pl.id === pid);
+        return {
+          name: p?.name || pid,
+          color: p?.color || null,
+          total,
+        };
+      })
       .sort((a, b) => b.total - a.total);
 
     return state;
