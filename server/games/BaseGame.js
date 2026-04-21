@@ -4,6 +4,7 @@ class BaseGame {
     this.players = players;
     this.actionQueue = [];
     this.processing = false;
+    this.deadline = null;
   }
 
   handleAction(playerId, action, payload) {

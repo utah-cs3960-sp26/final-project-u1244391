@@ -3,6 +3,7 @@ import ClueGiver from './ClueGiver.jsx'
 import Guesser from './Guesser.jsx'
 import Reveal from './Reveal.jsx'
 import Scores from './Scores.jsx'
+import PhaseTimer from '../../components/PhaseTimer.jsx'
 
 export default function WavelengthGame() {
   const { gameState } = useGame()
@@ -19,6 +20,7 @@ export default function WavelengthGame() {
             {gameState.scale.left} ⟷ {gameState.scale.right}
           </p>
         )}
+        <PhaseTimer deadline={gameState.deadline} />
         <p className="text-lg text-slate-400 animate-pulse">Waiting for {gameState.clueGiverName || 'clue giver'}...</p>
       </div>
     )
@@ -37,6 +39,7 @@ export default function WavelengthGame() {
           <p className="text-sm text-indigo-300">Your answer</p>
           <p className="text-2xl font-bold text-white">{gameState.clueGiverAnswer}</p>
         </div>
+        <PhaseTimer deadline={gameState.deadline} />
         <p className="text-lg text-slate-400 animate-pulse">Waiting for guesses...</p>
       </div>
     )

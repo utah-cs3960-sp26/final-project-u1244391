@@ -52,6 +52,113 @@ function broadcastGameState(io, room) {
   }
 }
 
+// Phase timer durations in seconds
+const PHASE_TIMERS = {
+  // Wavelength
+  'giving-clue': 60,
+  'guessing': 45,
+  // Chameleon
+  'clues': 30,
+  'voting': 45,
+  'redemption': 30,
+};
+
+function clearPhaseTimer(room) {
+  if (room.phaseTimer) {
+    clearTimeout(room.phaseTimer);
+    room.phaseTimer = null;
+  }
+  if (room.game) room.game.deadline = null;
+}
+
+function setupPhaseTimer(io, room) {
+  clearPhaseTimer(room);
+  if (!room.game) return;
+
+  const game = room.game;
+  const phase = game.phases.current();
+  const seconds = PHASE_TIMERS[phase];
+  if (!seconds) return;
+
+  // Skip timer during between-rounds pause
+  if (game.betweenRounds) return;
+
+  game.deadline = Date.now() + seconds * 1000;
+
+  room.phaseTimer = setTimeout(() => {
+    const currentRoom = rooms.get(room.code);
+    if (!currentRoom || !currentRoom.game) return;
+    const g = currentRoom.game;
+    const p = g.phases.current();
+
+    if (g instanceof Wavelength) {
+      if (p === 'giving-clue') {
+        g.clueGiverAnswer = '(no answer)';
+        g.phases.next();
+      } else if (p === 'guessing') {
+        const guessers = g.players.filter((pl) => pl.id !== g.clueGiverId);
+        for (const pl of guessers) {
+          if (g.guesses[pl.id] === undefined) g.guesses[pl.id] = 90;
+        }
+        g.roundScores = {};
+        for (const pl of guessers) {
+          const score = g._scoreGuess(g.guesses[pl.id]);
+          g.roundScores[pl.id] = score;
+          g.totalScores[pl.id] += score;
+        }
+        g.phases.next();
+      }
+    } else if (g instanceof Chameleon) {
+      if (p === 'clues' && !g.betweenRounds) {
+        const activeId = g.turnOrder[g.currentTurnIndex];
+        g.hints.push({ playerId: activeId, round: g.currentRound, hint: '...' });
+        g.currentTurnIndex++;
+        if (g.currentTurnIndex >= g.turnOrder.length) {
+          if (g.currentRound >= g.totalRounds) {
+            g.phases.next();
+          } else {
+            g.betweenRounds = true;
+            g.completedRound = g.currentRound;
+            // Schedule between-rounds advance
+            setTimeout(() => {
+              const r = rooms.get(room.code);
+              if (!r || !r.game) return;
+              r.game.advanceFromBetweenRounds();
+              broadcastGameState(io, r);
+              setupPhaseTimer(io, r);
+            }, 5000);
+          }
+        }
+      } else if (p === 'voting') {
+        for (const pl of g.players) {
+          if (g.votes[pl.id] === undefined) {
+            const others = g.players.filter((o) => o.id !== pl.id);
+            g.votes[pl.id] = others[Math.floor(Math.random() * others.length)].id;
+          }
+        }
+        const tally = {};
+        for (const v of Object.values(g.votes)) tally[v] = (tally[v] || 0) + 1;
+        const maxVotes = Math.max(...Object.values(tally));
+        const chameleonVotes = tally[g.chameleonId] || 0;
+        if (chameleonVotes === maxVotes && chameleonVotes > g.players.length / 2) {
+          g.phases.next();
+        } else {
+          g.outcome = 'chameleon_wins';
+          g.phases.set('reveal');
+        }
+      } else if (p === 'redemption') {
+        g.redemptionGuess = '';
+        g.outcome = 'players_win';
+        g.phases.next();
+      }
+    }
+
+    g.deadline = null;
+    broadcastGameState(io, currentRoom);
+    setupPhaseTimer(io, currentRoom);
+  }, seconds * 1000);
+}
+
 function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
     socket.on('room:create', ({ playerName, gameType }) => {
@@ -198,6 +305,7 @@ function registerSocketHandlers(io) {
 
         io.to(code).emit('game:started');
         broadcastGameState(io, currentRoom);
+        setupPhaseTimer(io, currentRoom);
       }, 5000);
     });
 
@@ -211,6 +319,7 @@ function registerSocketHandlers(io) {
         return;
       }
       broadcastGameState(io, room);
+      setupPhaseTimer(io, room);
 
       if (result && result.delayAdvance) {
         const delay = result.delayAdvance * 1000;
@@ -248,6 +357,7 @@ function registerSocketHandlers(io) {
       if (!room) return;
       if (socket.id !== room.hostId) return;
 
+      clearPhaseTimer(room);
       room.game = null;
       room.chat = [];
       io.to(code).emit('game:ended');

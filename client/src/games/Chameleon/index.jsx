@@ -3,6 +3,7 @@ import { useGame } from '../../context/GameContext.jsx'
 import Grid from './Grid.jsx'
 import VotePanel from './VotePanel.jsx'
 import RevealPanel from './RevealPanel.jsx'
+import PhaseTimer from '../../components/PhaseTimer.jsx'
 
 export default function ChameleonGame() {
   const { gameState } = useGame()
@@ -17,6 +18,7 @@ export default function ChameleonGame() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <h2 className="text-2xl font-bold text-emerald-400 mb-4">🦎 Chameleon</h2>
+        <PhaseTimer deadline={gameState.deadline} />
         <p className="text-lg text-slate-400 animate-pulse">Waiting for the Chameleon to guess the word...</p>
       </div>
     )
@@ -31,7 +33,7 @@ export default function ChameleonGame() {
 }
 
 function RedemptionInput() {
-  const { sendAction } = useGame()
+  const { gameState, sendAction } = useGame()
   const [guess, setGuess] = useState('')
 
   function handleSubmit() {
@@ -45,6 +47,7 @@ function RedemptionInput() {
       <p className="text-lg text-slate-300 mb-4 text-center">
         Guess the secret word to redeem yourself!
       </p>
+      <PhaseTimer deadline={gameState.deadline} />
       <input
         type="text"
         placeholder="Your guess..."

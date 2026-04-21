@@ -62,7 +62,7 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-slate-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center space-y-4">
           <h2 className="text-3xl font-bold">Credits</h2>
-          <p className="text-slate-300">Party Pack — A multiplayer party game collection</p>
+          <p className="text-slate-300">Party Pack — A multiplayer party game collection created by Gage Hansen partnered with Amp</p>
           <p className="text-slate-400 text-sm">Built with React, Socket.IO, and Tailwind CSS</p>
           <p className="text-slate-400 text-sm">Chameleon inspired by The Chameleon board game</p>
           <p className="text-slate-400 text-sm">Wavelength inspired by the Wavelength board game</p>

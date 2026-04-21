@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useGame } from '../../context/GameContext.jsx'
 import Dial from './Dial.jsx'
 import Button from '../../components/Button.jsx'
+import PhaseTimer from '../../components/PhaseTimer.jsx'
 
 export default function ClueGiver() {
   const { gameState, sendAction } = useGame()
@@ -33,6 +34,8 @@ export default function ClueGiver() {
           scale={gameState.scale}
         />
       </div>
+
+      <PhaseTimer deadline={gameState.deadline} />
 
       <p className="text-sm text-slate-400 mb-2">The target is at {displayTarget}. Think of something that fits here on the scale!</p>
 

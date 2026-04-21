@@ -132,6 +132,7 @@ class Wavelength extends BaseGame {
       totalRounds: this.totalRounds,
       scale: this.scale,
       players: playerList,
+      deadline: this.deadline,
     };
 
     // Target: only clue giver sees it before round-reveal

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useGame } from '../../context/GameContext.jsx'
 import Button from '../../components/Button.jsx'
+import PhaseTimer from '../../components/PhaseTimer.jsx'
 
 export default function VotePanel() {
   const { gameState, player, sendAction } = useGame()
@@ -37,6 +38,8 @@ export default function VotePanel() {
           </div>
         ))}
       </div>
+
+      <PhaseTimer deadline={gameState.deadline} />
 
       {/* Vote buttons */}
       {!voted ? (

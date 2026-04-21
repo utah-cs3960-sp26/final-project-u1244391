@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useGame } from '../../context/GameContext.jsx'
 import Dial from './Dial.jsx'
 import Button from '../../components/Button.jsx'
+import PhaseTimer from '../../components/PhaseTimer.jsx'
 
 export default function Guesser() {
   const { gameState, sendAction } = useGame()
@@ -22,6 +23,8 @@ export default function Guesser() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto">
       <h2 className="text-2xl font-bold text-indigo-400 mb-1">📡 Wavelength</h2>
       <p className="text-sm text-slate-400 mb-2">Round {gameState.currentRound} of {gameState.totalRounds}</p>
+
+      <PhaseTimer deadline={gameState.deadline} />
 
       {gameState.clueGiverAnswer && (
         <div className="bg-indigo-900/50 rounded-xl px-6 py-4 mb-4 text-center">

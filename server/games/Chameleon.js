@@ -153,6 +153,7 @@ class Chameleon extends BaseGame {
       isChameleon,
       betweenRounds: this.betweenRounds,
       completedRound: this.completedRound,
+      deadline: this.deadline,
     };
 
     if (phase === 'clues' && !this.betweenRounds) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useGame } from '../../context/GameContext.jsx'
 import ClueInput from './ClueInput.jsx'
+import PhaseTimer from '../../components/PhaseTimer.jsx'
 
 export default function Grid() {
   const { gameState, player, sendAction } = useGame()
@@ -107,6 +108,7 @@ export default function Grid() {
       {/* Input or waiting */}
       {!betweenRounds && (
         <>
+          <PhaseTimer deadline={gameState.deadline} />
           {isMyTurn ? (
             <ClueInput onSubmit={handleSubmitHint} />
           ) : (

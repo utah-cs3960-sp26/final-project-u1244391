@@ -9,3 +9,8 @@ I am going to make a SPEC.md that is a full spec sheet doc describing the projec
 So far everything is working as planned and making good progress. The game is working and servers are connected to load and play from multiple sources on both games. All the buttons and layouts are working good to the point where it is playable and game flows correctly. Hosting a game and joining the game from other accounts works and each player is allowed time to give answer and it is communicated to the other players. Voting and logic is working correclty but I would like to change and update things especially with the lobby and player customization and the wavelength game which plays a little wierd.  
 
 I really havent had any issues with amp doing stupid things at all. I put a lot of time into the SPEC.md page where I specified all the specific features and how the game should work and Always tell it to refer to it when giving instructions or things I want to fix specifying not to deviate too much from the spec sheet and It has really helped keep it in line. Im going to be updating it a little more to get more specific in some parts and adding some more features.
+
+# Week 14
+I feel I kept it pretty consistent and continued to use the design process throughout the build phase. I feel it went really smooth and my idea came out almost exactly as I was thinking it would. Im proud of the planning I did that made the project move smoothly and come out like I wanted the first time. 
+
+Here is my video : https://youtu.be/D59GZEvQwAU (sorry its a little long).
